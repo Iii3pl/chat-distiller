@@ -48,7 +48,6 @@ lark-cli auth login --recommend
 
 ### 已发布的 Review Skill
 
-- [zic-reviewer-skill](https://github.com/Iii3pl/zic-reviewer-skill) — 化工名，实际为某科技公司客户审稿视角
 - 更多示例欢迎 PR 贡献
 
 ## 许可
