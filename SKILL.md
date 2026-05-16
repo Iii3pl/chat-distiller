@@ -93,9 +93,9 @@ lark-cli auth login --recommend
 ```
 
 流程：
-1. 从飞书群聊映射表读取高优群列表
+1. 从飞书群聊映射表读取活跃群列表（或从 EXTEND.md 的 group_list 读取）
 2. 增量拉取微信 + 钉钉新消息（自上次运行后）
-3. 生成结构化摘要（按项目分组、优先级标注）
+3. 生成结构化摘要（按项目/客户分组）
 4. 保存到 `{data_root}/{date}/digest.md`
 5. 更新 `history.json`
 
@@ -190,7 +190,7 @@ lark-cli base +record-list \
   --limit 500 --format json
 ```
 
-从表中获取：群名 → 平台(微信/钉钉) → 关联项目 → 客户 L1/L2/L3 → 部门 → 优先级(🔴高/🟡中/🟢低)
+从表中获取：群名 → 平台(微信/钉钉) → 关联项目 → 客户 L1/L2/L3 → 部门
 
 ## 6 层 Persona 蒸馏框架
 
