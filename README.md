@@ -1,14 +1,15 @@
 # Chat Distiller
 
-从微信、钉钉、飞书聊天记录中蒸馏人物画像、生成每日摘要。
+从微信、钉钉、飞书的群聊和私聊中蒸馏人物画像、生成每日摘要。
 
 ## 独有优势
 
 - **三平台**：微信（wx-cli）+ 钉钉（dingwave）+ 飞书（lark-cli）
-- **飞书骨架**：通过飞书多维表格自动定位每个人物在哪些群活跃
+- **群聊+私聊**：支持群聊和 1 对 1 私聊两种数据源
 - **6 层 Persona**：Layer 0-5 + 纠错层，追加式合并
 - **增量读取**：每群维护 history.json，只拉新消息
-- **首次引导**：内置环境检查 hook，引导安装 wx-cli / dingwave / lark-cli
+- **首次引导**：内置环境检查 hook + 交互式配置向导
+- **一键导出**：蒸馏完成后直接导出为可发布的 Review SKILL.md
 
 ## 依赖安装
 
@@ -16,73 +17,39 @@
 # 微信
 npm install -g @jackwener/wx-cli
 
-# 钉钉（联系管理员获取 dingwave）
-# 解密后数据库位于 ~/.dingwave/decrypted/
+# 钉钉
+# 从 https://github.com/Iii3pl/dingwave 下载或自行编译
 
 # 飞书
-npm install -g @anthropic/lark-cli
-lark-cli auth login --domain base
+npx @larksuite/cli@latest install
+lark-cli auth login --recommend
 ```
 
 ## 快速开始
 
-### 1. 首次配置
-
-调用任意命令会自动触发环境检查，引导你完成配置。或手动创建：
-
-```bash
-cp EXTEND.md.example EXTEND.md
-```
-
-### 2. 生成每日摘要
+首次运行自动触发环境检查和交互式配置：
 
 ```
-/chat-distiller --daily-digest
-```
-
-### 3. 蒸馏人物画像
-
-```
-/chat-distiller 林小靓
-```
-
-### 4. 批量回溯
-
-```
-/chat-distiller --backfill --group "京东官号视频对接群"
+/chat-distiller --daily-digest          # 生成今日摘要
+/chat-distiller 王小明                   # 蒸馏某人的画像
+/chat-distiller --dm 王小明             # 拉取私聊记录
+/chat-distiller --backfill --group "群名"  # 批量回溯
+/chat-distiller --export-skill 王小明    # 导出为 Review Skill
 ```
 
 ## 制作你自己的 Review Skill
 
-1. **选目标** — 确定要模拟的客户/同事
-2. **蒸馏** — `/chat-distiller {人名}` 提取完整 6 层画像
-3. **定义审稿规则** — 从 L0/L4/雷区 提取审核标准
-4. **发布** — 参考 [zic-reviewer-skill](https://github.com/Iii3pl/zic-reviewer-skill) 格式
+1. **安装** — 配置微信/钉钉数据源
+2. **蒸馏** — `/chat-distiller <人名>` 自动拉取聊天记录，提取 6 层画像
+3. **导出** — `/chat-distiller --export-skill <人名>` 生成标准格式
+4. **发布** — 推到 GitHub
 
-### 通版模板
+> ⚠️ 公开版本的 Review Skill 请使用化名，不要暴露真实姓名和群聊名称。
 
-```markdown
----
-name: {target}-reviewer
-description: 模拟 {姓名} 的审稿视角
-user-invocable: true
----
+### 已发布的 Review Skill
 
-# {姓名} Reviewer
-
-## 角色设定
-[从 Chat Distiller 蒸馏的 L0-L1]
-
-## 审稿总原则
-[从 Layer 4 提取]
-
-## 高敏感点
-[从雷区+反馈模式提取]
-```
-
-### 已发布
-
-- [zic-reviewer-skill](https://github.com/Iii3pl/zic-reviewer-skill) — 未来生活实验室 Zic 审稿
+- [zic-reviewer-skill](https://github.com/Iii3pl/zic-reviewer-skill) — 化工名，实际为某科技公司客户审稿视角
+- 更多示例欢迎 PR 贡献
 
 ## 许可
 

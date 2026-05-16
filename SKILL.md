@@ -1,8 +1,8 @@
 ---
 name: chat-distiller
-description: 从微信/钉钉/飞书聊天记录中蒸馏人物画像、生成每日摘要。支持增量读取、飞书多维表格骨架定位、6层人格分析。输入目标人物名或群组名即可。
-argument-hint: "[目标人物名 / 群组名 / --daily-digest]"
-version: "2.0.0"
+description: 从微信/钉钉/飞书群聊和私聊中蒸馏人物画像、生成每日摘要。支持增量读取、6层人格分析、一键导出 Review Skill。
+argument-hint: "[目标人物名 / 群组名 / --daily-digest / --dm 人名]"
+version: "2.1.0"
 user-invocable: true
 ---
 
@@ -10,81 +10,98 @@ user-invocable: true
 
 > ⚠️ **Sandbox 注意**：wx-cli 需要访问 `~/Library/Containers/com.tencent.xinWeChat/` 和 `~/.wx-cli/`，这些路径在 Claude Code 默认沙箱外。所有 `wx` 命令需要 `dangerouslyDisableSandbox: true`。dingwave 同理需要访问 `~/Library/Application Support/DingTalkMac/`。
 
-从微信、钉钉、飞书聊天记录中提取人物特征，生成结构化摘要，追加式合并到 6 层人格画像。
+从微信、钉钉、飞书的群聊和私聊中提取人物特征，生成结构化摘要，追加式合并到 6 层人格画像。
+
+## Execution Protocol（执行协议）
+
+每次调用遵循以下顺序，**不要跳过**：
+
+1. **Preflight** — 运行 Hook 1-3 的环境检查。三个平台全部检查，不跳过。
+2. **Report** — 向用户展示检查结果：
+   ```
+   [✓] wx-cli      v0.1.9 已初始化
+   [✗] dingwave    未找到
+   [✓] lark-cli     已认证
+   ```
+3. **Block** — 如果请求的模式依赖某个未通过的平台，停止并引导用户修复。
+4. **Resolve** — 对每个失败项，按对应 Hook 的恢复步骤引导用户。**绝对不要自己执行 `sudo` 命令**。
+5. **Proceed** — 所有必需平台通过后，进入用户请求的工作模式。
+
+## Progress Reporting
+
+每个操作步骤向用户报告进度：
+- "正在检查环境..."
+- "正在拉取微信群消息（上次运行后新增 50 条）..."
+- "正在拉取钉钉群消息（12 条新消息）..."
+- "正在生成结构化摘要..."
+- "保存到 data/2026-05-16/digest.md"
+
+单步超过 30 秒时发送中间状态（"已处理 200/500 条..."）。
 
 ## 首次使用：环境检查
 
-首次调用时，会自动运行环境检查，引导你完成各平台的数据源配置。
-
 ### Hook 1：微信环境检查
 
+**CLI 查找顺序**：先查 repo 自带的 `./bin/wx`，再查 `./node_modules/.bin/wx`，最后用系统 PATH 的 `wx`。
+
 ```bash
-# 检查 wx-cli 是否安装
-wx --version 2>&1 || echo "NOT_INSTALLED"
+# 查找 wx-cli
+WX=$(command -v ./bin/wx || command -v ./node_modules/.bin/wx || command -v wx || echo "")
+if [ -z "$WX" ]; then echo "NOT_INSTALLED"; else $WX --version; fi
 
-# 检查是否已初始化
-wx sessions 2>&1 || echo "NOT_INIT"
+# 检查初始化
+$WX sessions 2>&1 && echo "INIT" || echo "NOT_INIT"
 ```
 
-**如果未安装**：
-```
-npm install -g @jackwener/wx-cli
-```
+根据结果向用户展示：
+- **已安装+已初始化** → 绿色 ✓，显示版本号
+- **已安装+未初始化** → 引导用户完成以下 4 步（**不要自己执行 sudo**）：
 
-**如果未初始化**（需要微信正在运行）：
-```bash
-# macOS：先确保微信已登录
-# 1. 重签名微信（只需一次，微信更新后需重做）
-sudo codesign --force --deep --sign - /Applications/WeChat.app
+> 以下步骤需要你在终端中手动完成：
+> 1. `sudo codesign --force --deep --sign - /Applications/WeChat.app`
+> 2. `killall WeChat && open /Applications/WeChat.app`
+> 3. `sudo wx init`
+> 4. `sudo chown -R $(whoami) ~/.wx-cli`
+>
+> 完成后告诉我，我重新检查。
 
-# 2. 重启微信
-killall WeChat && open /Applications/WeChat.app
-
-# 3. 初始化（提取数据库密钥）
-sudo wx init
-
-# 4. 修复权限（如果 ~/.wx-cli 被 root 占用）
-sudo chown -R $(whoami) ~/.wx-cli
-```
+- **未安装** → 引导安装：`npm install -g @jackwener/wx-cli`
 
 ### Hook 2：钉钉环境检查
 
-> ⚠️ 钉钉聊天记录读取使用内部工具 **dingwave**。目前没有公开的钉钉本地数据库 CLI，需要自行编译或联系管理员。
+> ℹ️ 钉钉聊天记录读取使用 [dingwave](https://github.com/Iii3pl/dingwave)。如无法获取，可跳过钉钉功能，仅使用微信+飞书。
 
 ```bash
-# 检查 dingwave 是否可用
-ls /Users/$(whoami)/.dingwave/decrypted/*_dingtalk_decrypted.db 2>/dev/null || echo "NOT_FOUND"
+DW=$(command -v ./bin/dingwave-cli || command -v ./node_modules/.bin/dingwave-cli || command -v dw || echo "")
+if [ -z "$DW" ]; then echo "NOT_FOUND"; else ls ~/.dingwave/decrypted/*_dingtalk_decrypted.db 2>/dev/null || echo "NO_DB"; fi
 ```
 
-**如果未解密**：
-1. 确保钉钉 Mac 版已安装并登录
-2. 获取 dingwave CLI 二进制（macOS arm64），放入 `~/bin/` 或 `/usr/local/bin/`
-3. 运行 `dw doctor --json` 检查钉钉数据目录
-4. 运行 `dw decrypt` 解密数据库（首次需要钉钉登录状态）
-5. 解密后数据库位于 `~/.dingwave/decrypted/{uid}_dingtalk_decrypted.db`
-
-> 提示：dingwave 基于钉钉 Mac 版的 SQLCipher 加密数据库。如有自建需求，可参考 [wx-cli](https://github.com/jackwener/wx-cli) 的实现思路——提取密钥 → 解密 SQLite → 查询。
-
-**故障排查**：
-- `dw: command not found` → dingwave 不在 PATH
-- `database is locked` → 退出钉钉再试
-- `no decrypted db found` → 运行 `dw decrypt`
+根据结果引导：
+- **已就绪** → 绿色 ✓
+- **未解密** → 引导：1) 下载 dingwave 2) `dw doctor --json` 3) `dw decrypt`
+- **未找到工具** → 提供 GitHub 链接，允许跳过
 
 ### Hook 3：飞书环境检查
 
 ```bash
-# 检查 lark-cli 是否已认证
-lark-cli auth status 2>&1 || echo "NOT_AUTH"
+LARK=$(command -v ./bin/lark-cli || command -v ./node_modules/.bin/lark-cli || command -v lark-cli || echo "")
+if [ -z "$LARK" ]; then echo "NOT_INSTALLED"; else $LARK auth status 2>&1; fi
 ```
 
-**如果未认证**：
-```bash
-npx @larksuite/cli@latest install
-lark-cli auth login --recommend
-# --recommend 自动选择常用权限（base + wiki + im）
-```
+- **未安装** → `npx @larksuite/cli@latest install`
+- **未认证** → `lark-cli auth login --recommend`
 
 ## 工作模式
+
+### 模式 0：私聊 / 1对1 消息
+
+```
+/chat-distiller --dm 王小明
+```
+
+拉取与指定联系人的微信+钉钉私聊记录。私聊对人物蒸馏尤其有价值——群聊展现协作模式，私聊展现真实性格。
+- **微信私聊**：`wx history "联系人备注" --chat-type private -n 200 --json`
+- **钉钉私聊**：`dw history "{uid}" -n 200 --json`（需先 `dw resolve user "姓名"` 获取 uid）
 
 ### 模式 1：每日摘要（Daily Digest）
 
@@ -93,104 +110,102 @@ lark-cli auth login --recommend
 ```
 
 流程：
-1. 从飞书群聊映射表读取活跃群列表（或从 EXTEND.md 的 group_list 读取）
-2. 增量拉取微信 + 钉钉新消息（自上次运行后）
+1. 从群聊列表（EXTEND.md 的 `group_list` 或自动发现）读取活跃群
+2. 增量拉取微信 + 钉钉新消息（自 `history.json` 记录的 `last_message_time` 之后）
 3. 生成结构化摘要（按项目/客户分组）
 4. 保存到 `{data_root}/{date}/digest.md`
 5. 更新 `history.json`
 
+> 如配置了飞书多维表格，可从群聊映射表中自动发现群组。未配置时使用 EXTEND.md 的 `group_list` 手动指定。
+
 ### 模式 2：人物蒸馏（Persona Distill）
 
 ```
-/chat-distiller 林小靓
-/chat-distiller --group "元宝传播@小题"
+/chat-distiller 王小明
+/chat-distiller --group "项目Alpha讨论群"
 ```
 
 流程：
-1. 从飞书群聊映射表定位目标人物的所有活跃群
+1. 定位目标人物所在的群（从 EXTEND.md 的 `group_list` 或飞书映射表）+ 私聊
 2. 拉取微信 + 钉钉消息
-3. 按 6 层框架提取 delta：
-   - L0 核心性格
-   - L1 身份
-   - L2 表达风格
-   - L3 行为模式
-   - L4 决策倾向
-   - L5 人际互动模式
-4. 追加式合并到已有 persona.md
-5. 标注 `[日期] [信源] [置信度]`
+3. 按 6 层框架提取 delta（L0-L5）
+4. **追加式合并**到已有 persona.md。如无 persona.md → 自动调用 `/add-profile` 创建骨架再蒸馏
+5. 标注 `[日期] [信源: 平台/群名] [置信度]`
 
 ### 模式 3：批量回溯（Backfill）
 
 ```
-/chat-distiller --backfill --group "京东官号视频对接群"
+/chat-distiller --backfill --group "项目Alpha讨论群"
 ```
 
-拉取指定群的全量历史消息，批量生成摘要和人物画像。
+拉取指定群的全量历史消息，批量生成摘要和画像。
 
 ### 模式 4：导出 Review Skill
 
 ```
-/chat-distiller --export-skill Zic
+/chat-distiller --export-skill <人名>
 ```
 
-将已蒸馏的人物画像导出为独立的审稿 SKILL.md，可直接发布到 GitHub。  
-导出包含：6 层画像摘要 + 审稿规则 + OracleProto 校准 + 送审话术模板。
+将已蒸馏的人物画像导出为独立的审稿 SKILL.md，可直接发布到 GitHub。导出包含：6 层画像摘要 + 审稿规则 + 送审话术模板。
 
 ## 配置
 
-创建 EXTEND.md 自定义配置：
+### 交互式配置（无 EXTEND.md 时）
+
+如果没有 EXTEND.md，引导用户逐项填写。每项先尝试自动检测，检测不到再提问：
+
+1. **self_wxid / self_display** — 提问
+2. **wx_cli_path** — `which wx` 自动检测
+3. **dw_path / dw_db** — 检查 `~/bin/`、`~/.dingwave/decrypted/*.db`
+4. **lark_base_token / lark_table_id** — 提问（需先在飞书创建多维表格）
+5. **data_root** — 默认 `./data`
+6. **default_since** — 默认当天往前 7 天
+
+收集完毕后创建 EXTEND.md。
+
+### EXTEND.md 示例
 
 ```yaml
-# 微信相关
+# 微信
 wx_cli_path: /opt/homebrew/bin/wx
-self_wxid: wxid_xxxxx
-self_display: 吴亮
+self_wxid: wxid_xxxxxxxxxxxxx
+self_display: 你的微信昵称
 
-# 钉钉相关
+# 钉钉
 dw_path: /path/to/dingwave-cli
 dw_db: /Users/xxx/.dingwave/decrypted/xxx_dingtalk_decrypted.db
 
-# 飞书相关
-lark_base_token: FMy8bZknzaSFTWsnQqIcTd6vnNd
-lark_table_id: tbl1mn5LHpdhJ8do
+# 飞书（可选——如不使用飞书多维表格，删掉此段）
+lark_base_token: your_lark_base_token_here
+lark_table_id: your_lark_table_id_here
 
-# 数据存储
+# 存储
 data_root: ./data
+default_since: 2026-06-01
 
-# 默认时间范围
-default_since: 2026-05-01
+# 群聊列表（如不使用飞书自动发现，在此手动指定）
+group_list:
+  - group_name: "项目Alpha讨论群"
+    platform: wechat
+    group_id: "123456@chatroom"
+  - group_name: "客户Beta对接群"
+    platform: dingtalk
+    group_id: "abc123def456"
 ```
-
-不创建 EXTEND.md 时，使用交互式引导配置。
 
 ## 增量读取机制
 
-每个群维护一个 `history.json`：
+每个群维护 `{data_root}/{group_id}/history.json`：
 
 ```json
 {
-  "group_id": "xxx@chatroom",
-  "group_name": "元宝传播@小题",
-  "last_message_time": "2026-05-13T15:30:00",
-  "last_digest_file": "2026-05-13.md",
+  "group_id": "123456@chatroom",
+  "group_name": "项目Alpha讨论群",
+  "last_message_time": "2026-06-01T15:30:00",
+  "last_digest_file": "2026-06-01.md",
   "message_count": 500
 }
 ```
-
-下次运行时自动从 `last_message_time` 开始拉取，只处理新消息。
-
-## 飞书骨架定位
-
-飞书的群聊映射表是群组 → 项目 → 客户 → 部门的唯一映射源。
-
-```bash
-lark-cli base +record-list \
-  --base-token {token} \
-  --table-id tbl1mn5LHpdhJ8do \
-  --limit 500 --format json
-```
-
-从表中获取：群名 → 平台(微信/钉钉) → 关联项目 → 客户 L1/L2/L3 → 部门
 
 ## 6 层 Persona 蒸馏框架
 
@@ -203,40 +218,36 @@ lark-cli base +record-list \
 | L4 决策倾向 | 优先级排序、取舍逻辑 | decisions > long_form |
 | L5 人际互动 | 对上下级/客户的不同模式 | casual |
 
-置信度标尺：
-- `high` — ≥3 个独立信源验证
-- `medium` — 1-2 个信源清晰出现
-- `low` — 单次观察
+置信度标尺：`high`（≥3 个独立信源）| `medium`（1-2 个）| `low`（单次观察）
 
 ## 输出示例
 
 ### 每日摘要
 
 ```markdown
-# 消息摘要 2026-05-13
+# 消息摘要 2026-06-01
 
-📋 TL;DR: 京东JOY视频过审，元宝新选题推进
+📋 TL;DR: 项目Alpha视频过审，客户Beta新选题推进
 
-## 🔴 高优
-### 京东官号视频对接群
-- 母亲节视频卡审已解决，投流文档已更新
-- 来贺：气偶拿回来了，可以安排拍摄
+## 项目Alpha讨论群（微信）
+- 刘运营：今日发布3条
+- 赵策略：后续希望加强情绪向内容
 
-### 元宝传播@小题  
-- 西多多：今日发布3条，矩阵号日常+蒜苔游戏+仿妆
-- 侯文韬已确认选题方向
-
-## 🟡 中优
-...
+## 客户Beta对接群（钉钉）
+- 陈工：物料已收到，可以安排拍摄
 ```
 
 ### 人物蒸馏 Delta
 
 ```markdown
-- [2026-05-13] [信源: 微信/元宝传播] [置信度: medium] 
-  侯文韬在选题确认时偏好看到「为什么选这个方向」的策略说明，
-  不只是看内容本身。
+- [2026-06-01] [信源: 微信/项目Alpha群] [置信度: medium] 
+  赵策略在选题确认时偏好看到策略说明，不只是看内容本身。
 ```
+
+## 技能协作
+
+发现新人时自动调用 `/add-profile` 创建骨架。蒸馏完成后自动调用 `/update-index` 重建索引。
+如需创建项目页，运行 `/add-project`。
 
 ## 依赖
 
@@ -249,11 +260,9 @@ lark-cli base +record-list \
 
 ## 从蒸馏到 Review Skill
 
-蒸馏出人物画像后，可以制作针对性的审稿 Skill：
+1. **选目标** — 确定要模拟的客户/同事
+2. **蒸馏** — `/chat-distiller <人名>` 提取完整画像
+3. **导出** — `/chat-distiller --export-skill <人名>` 生成标准格式
+4. **发布** — 推到 GitHub，像 [zic-reviewer-skill](https://github.com/Iii3pl/zic-reviewer-skill) 一样
 
-1. **选目标**：确定要模拟的客户/同事
-2. **蒸馏**：`/chat-distiller {人名}` 提取完整画像
-3. **定义审稿规则**：基于 L0-L5 画像，写出该人物的敏感点、决策偏好、表达风格
-4. **发布**：将画像 + 审稿规则打包为独立 SKILL.md
-
-详见 [README.md](./README.md) 中的「制作你自己的 Review Skill」教程。
+> 公开版本的 Review Skill 请使用化名，不要暴露真实姓名和群聊名称。
