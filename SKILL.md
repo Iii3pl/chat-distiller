@@ -49,6 +49,8 @@ sudo chown -R $(whoami) ~/.wx-cli
 
 ### Hook 2：钉钉环境检查
 
+> ⚠️ 钉钉聊天记录读取使用内部工具 **dingwave**。目前没有公开的钉钉本地数据库 CLI，需要自行编译或联系管理员。
+
 ```bash
 # 检查 dingwave 是否可用
 ls /Users/$(whoami)/.dingwave/decrypted/*_dingtalk_decrypted.db 2>/dev/null || echo "NOT_FOUND"
@@ -56,16 +58,17 @@ ls /Users/$(whoami)/.dingwave/decrypted/*_dingtalk_decrypted.db 2>/dev/null || e
 
 **如果未解密**：
 1. 确保钉钉 Mac 版已安装并登录
-2. 获取 dingwave CLI（macOS arm64 二进制，放入 `~/bin/` 或 `/usr/local/bin/`）
+2. 获取 dingwave CLI 二进制（macOS arm64），放入 `~/bin/` 或 `/usr/local/bin/`
 3. 运行 `dw doctor --json` 检查钉钉数据目录
 4. 运行 `dw decrypt` 解密数据库（首次需要钉钉登录状态）
 5. 解密后数据库位于 `~/.dingwave/decrypted/{uid}_dingtalk_decrypted.db`
 
+> 提示：dingwave 基于钉钉 Mac 版的 SQLCipher 加密数据库。如有自建需求，可参考 [wx-cli](https://github.com/jackwener/wx-cli) 的实现思路——提取密钥 → 解密 SQLite → 查询。
+
 **故障排查**：
-- `dw: command not found` → dingwave 不在 PATH，检查安装路径
-- `database is locked` → 钉钉正在运行，先退出钉钉再试
-- `no decrypted db found` → 运行 `dw decrypt` 重新解密
-- 无法获取 dingwave → 在 Slack/微信联系运维或使用 [github.com/jackwener/wx-cli](https://github.com/jackwener/wx-cli) 参考实现自行编译
+- `dw: command not found` → dingwave 不在 PATH
+- `database is locked` → 退出钉钉再试
+- `no decrypted db found` → 运行 `dw decrypt`
 
 ### Hook 3：飞书环境检查
 
@@ -76,9 +79,9 @@ lark-cli auth status 2>&1 || echo "NOT_AUTH"
 
 **如果未认证**：
 ```bash
-lark-cli auth login --domain base --domain wiki
-# base: 读取多维表格（群聊映射表）
-# wiki: 读取飞书文档（可选）
+npx @larksuite/cli@latest install
+lark-cli auth login --recommend
+# --recommend 自动选择常用权限（base + wiki + im）
 ```
 
 ## 工作模式
@@ -237,9 +240,12 @@ lark-cli base +record-list \
 
 ## 依赖
 
-- **wx-cli**：`npm install -g @jackwener/wx-cli`（微信 Mac 版 4.x 需运行中）
-- **dingwave**：本地钉钉数据库解密工具（联系管理员获取）
-- **lark-cli**：`npm install -g @anthropic/lark-cli` 然后 `lark-cli auth login --domain base`
+| 工具 | 安装 | 用途 |
+|------|------|------|
+| **wx-cli** | `npm install -g @jackwener/wx-cli` | 微信 Mac 版本地数据库读取 |
+| **dingwave** | [github.com/Iii3pl/dingwave](https://github.com/Iii3pl/dingwave) | 钉钉 Mac 版本地数据库解密+读取 |
+| **lark-cli** | `npx @larksuite/cli@latest install` | 飞书多维表格 + 文档读取 |
+
 
 ## 从蒸馏到 Review Skill
 
