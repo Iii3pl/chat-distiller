@@ -1,0 +1,20 @@
+# EXTEND.md — Chat Distiller 配置
+
+# 微信
+self_wxid: wxid_xxxxxxxxxxxxx
+self_display: 你的微信昵称
+wx_cli_path: /opt/homebrew/bin/wx
+
+# 钉钉
+dw_path: /path/to/dingwave-cli
+dw_db: /Users/xxx/.dingwave/decrypted/xxxxx_dingtalk_decrypted.db
+
+# 飞书
+lark_base_token: FMy8bZknzaSFTWsnQqIcTd6vnNd
+lark_table_id: tbl1mn5LHpdhJ8do
+
+# 存储
+data_root: ./data
+default_since: 2026-05-01
+max_messages_per_group: 500
+min_priority: 🟡中
