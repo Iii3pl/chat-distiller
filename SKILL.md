@@ -8,6 +8,8 @@ user-invocable: true
 
 # Chat Distiller — 聊天记录蒸馏器
 
+> ⚠️ **Sandbox 注意**：wx-cli 需要访问 `~/Library/Containers/com.tencent.xinWeChat/` 和 `~/.wx-cli/`，这些路径在 Claude Code 默认沙箱外。所有 `wx` 命令需要 `dangerouslyDisableSandbox: true`。dingwave 同理需要访问 `~/Library/Application Support/DingTalkMac/`。
+
 从微信、钉钉、飞书聊天记录中提取人物特征，生成结构化摘要，追加式合并到 6 层人格画像。
 
 ## 首次使用：环境检查
@@ -52,12 +54,18 @@ sudo chown -R $(whoami) ~/.wx-cli
 ls /Users/$(whoami)/.dingwave/decrypted/*_dingtalk_decrypted.db 2>/dev/null || echo "NOT_FOUND"
 ```
 
-**如果未解密**：dingwave 需要先解密钉钉本地数据库。  
-1. 确保钉钉 Mac 版已安装并登录  
-2. 联系管理员获取 dingwave CLI 工具  
-3. 运行 `dw doctor --json` 检查环境  
-4. 运行 `dw decrypt` 解密数据库  
-5. 解密后的数据库位于 `~/.dingwave/decrypted/`
+**如果未解密**：
+1. 确保钉钉 Mac 版已安装并登录
+2. 获取 dingwave CLI（macOS arm64 二进制，放入 `~/bin/` 或 `/usr/local/bin/`）
+3. 运行 `dw doctor --json` 检查钉钉数据目录
+4. 运行 `dw decrypt` 解密数据库（首次需要钉钉登录状态）
+5. 解密后数据库位于 `~/.dingwave/decrypted/{uid}_dingtalk_decrypted.db`
+
+**故障排查**：
+- `dw: command not found` → dingwave 不在 PATH，检查安装路径
+- `database is locked` → 钉钉正在运行，先退出钉钉再试
+- `no decrypted db found` → 运行 `dw decrypt` 重新解密
+- 无法获取 dingwave → 在 Slack/微信联系运维或使用 [github.com/jackwener/wx-cli](https://github.com/jackwener/wx-cli) 参考实现自行编译
 
 ### Hook 3：飞书环境检查
 
@@ -68,8 +76,9 @@ lark-cli auth status 2>&1 || echo "NOT_AUTH"
 
 **如果未认证**：
 ```bash
-lark-cli auth login --domain base
-# 会弹出浏览器完成 OAuth 授权
+lark-cli auth login --domain base --domain wiki
+# base: 读取多维表格（群聊映射表）
+# wiki: 读取飞书文档（可选）
 ```
 
 ## 工作模式
@@ -114,6 +123,15 @@ lark-cli auth login --domain base
 ```
 
 拉取指定群的全量历史消息，批量生成摘要和人物画像。
+
+### 模式 4：导出 Review Skill
+
+```
+/chat-distiller --export-skill Zic
+```
+
+将已蒸馏的人物画像导出为独立的审稿 SKILL.md，可直接发布到 GitHub。  
+导出包含：6 层画像摘要 + 审稿规则 + OracleProto 校准 + 送审话术模板。
 
 ## 配置
 
