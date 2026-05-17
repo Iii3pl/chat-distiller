@@ -24,6 +24,33 @@ npm install -g @jackwener/wx-cli
 npx @larksuite/cli@latest install
 lark-cli auth login --recommend
 ```
+## wx cli安装注意
+关于 wx-cli 的安装：
+
+Windows 电脑：
+
+npm（推荐，全平台）
+npx skills add jackwener/wx-cli
+
+Windows（以管理员身份运行 PowerShell）
+wx init
+
+苹果电脑：
+
+### 1. 签名（只需做一次，WeChat 更新后重做）
+codesign --force --deep --sign - /Applications/WeChat.app
+
+### 2. 清理旧 TCC 授权记录（重签名后必做，否则微信截图/通话权限可能 silent 失效）
+for s in ScreenCapture Camera Microphone AppleEvents AddressBook \
+         SystemPolicyDocumentsFolder SystemPolicyDownloadsFolder SystemPolicyDesktopFolder; do
+  tccutil reset "$s" com.tencent.xinWeChat
+done
+
+### 3. 重启微信，等待完全登录
+killall WeChat && open /Applications/WeChat.app
+
+### 4. 初始化
+sudo wx init
 
 ## 快速开始
 
